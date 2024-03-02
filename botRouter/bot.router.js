@@ -22,7 +22,7 @@ bot.start(async (ctx) => {
 //bot on to verify user
 bot.action('verify_user', async (ctx)=>{
   try {
-    await verifyUser(ctx)
+    await verifyUserMehod(ctx)
   } catch (error) {
     console.log(error)
   }
@@ -61,6 +61,14 @@ bot.action('set_wallet_address', async (ctx)=>{
   }
 });
 
+bot.action('get_referrals', async (ctx)=>{
+  try {
+    await referralsProgramFunction(ctx)
+  } catch (error) {
+    console.log(error)
+  }
+})
+
 bot.on('message', async (ctx)=>{
   try {
     await handleMessageMethod(ctx)
@@ -69,39 +77,45 @@ bot.on('message', async (ctx)=>{
   }
 })
 
+
+///from here will be in a separate file
 const saveUser = async (ctx) => {
     try {
         const {userId,chatId, userName, startPayload, messageId} =  TelegrafHelper.getUserChatInfo(ctx);
 
-        //console.log('i am startPayload', startPayload)//this is a payload or user data that are come along when a user click on the /start command.. for example: if someone refer you, the payload is the information of the person who referred you  
+
       
         const user = await User.findOne({userId});
 
         if (!user) {
-            let referralId;
+          console.log('i am startPayload', startPayload)//this is a payload or user data that are come along when a user click on the /start command.. for example: if someone refer you, the payload is the information of the person who referred you  
+            let referredBy;
+
+            if (startPayload && startPayload === userId) {
+              await replyWithHTML(`you can not refer yourself`)       
+           }
 
             if (startPayload && startPayload !== userId) {
-                referralId = startPayload        
+               referredBy = startPayload        
             }
+
 
       await User.create({
                 userId: userId, 
                 userName: userName,
-                referralId: referralId
+                referredBy: referredBy
             })
-            //check if uer is verified thaat is if the user has join join
                  
         }
 
-    
-
+ //check if uer is verified that is if the user has join join
     const isverified =  await CheckIfUserIsVerified(ctx);
 
     if (!isverified) {
       return;
     }
 
-    ///if your have verify response with this message below
+    ///if you have verify response with this message below
 
     const sentMessage = await TelegrafHelper.sendReponse(
       ctx,
@@ -117,37 +131,102 @@ const saveUser = async (ctx) => {
     }
 }
 
-const verifyUser = async (ctx) => {
-    const {userId} =  TelegrafHelper.getUserChatInfo(ctx);
-    try {
-       const user = await User.findOne({userId})
-       //console.log to check the user     
-      // console.log('now verifying this user', user.userName)
-       const id = user._id
+const verifyUserMehod = async (ctx) => {
+  const {userId, chatId, messageId} = TelegrafHelper.getUserChatInfo(ctx);
+  try {
+      const groupJoined = EnvironVariables.TELEGRAM_GROUPS;
+      let verificationStatus = false;
 
-       await User.findByIdAndUpdate(
-        id, 
-        {isUserVerify: true},
-        {new: true, runValidators: true}
-        )
-
-        //if updated successfully send a response
-       await saveUser(ctx);
-    } catch (error) {
-        console.log(error)
+      for (const telegroupId of groupJoined) {
+        const isValidMember = await ctx.telegram.getChatMember(telegroupId, userId).then((chatMember) => {
+            const status = chatMember.status;
+            return ['member', 'admin', 'administrator', 'creator', 'restricted'].includes(status);
+        }).catch((error) => {
+            console.log('Error getting chat member:', error); // Log the error
+            return false;
+        });
+    
+        if (!isValidMember) {
+            verificationStatus = false;
+            break;
+        } else {
+            verificationStatus = true;
+        }
     }
-}
+    
+
+      if (!verificationStatus) {
+        const sentMessage = await ctx.replyWithHTML(Message.botCondition, {
+          disable_web_page_preview: true,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: '✅ DONE',
+                  callback_data: 'verify_user'
+                }
+              ]
+            ]
+          }
+        });
+          await BaseHelper.deletePrevMsg(bot, chatId, messageId )
+          await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
+          return;
+      }
+
+      const user = await User.findOne({userId});
+      const id = user._id;
+
+      if (user) {
+        await User.findByIdAndUpdate(
+          id,
+          {isUserVerify: true},
+          {new: true, runValidators: true}
+      );
+      }
+
+      const referralByUser = user.referredBy;
+      //console.log('you refer me', referralByUser)
+
+      if (referralByUser) {
+        const referalUser = await User.findOne({ userId: referralByUser});
+        //console.log('referal user id', referalUser)
+
+        if (referalUser) {
+          const referbyId = referalUser._id;
+          console.log('rId', referbyId);
+          const referPoint = EnvironVariables.REFERRALPOINT;
+          const currentblance = referalUser.balance
+          // console.log(' i am rfpoint', referPoint);
+          // console.log('my current balance', currentblance);
+          const userbalance = currentblance + referPoint
+          // console.log('your balance', userbalance)
+
+          await User.findByIdAndUpdate(
+              referbyId,
+              {balance: userbalance},
+              {new: true, runValidators: true}
+          );
+      }
+      }
+      await saveUser(ctx);
+  } catch (error) {
+      console.log(error);
+      // Handle error appropriately, e.g., notify the user
+  }
+};
 
 //check if uer is verify
 
-const CheckIfUserIsVerified= async (ctx)=>{
+const CheckIfUserIsVerified = async (ctx)=>{
 
   const {userId, chatId, messageId} =  TelegrafHelper.getUserChatInfo(ctx);
 
-  const user = await User.findOne({userId})
+  const user = await User.findOne({userId}).lean()
 
   if (user && user.isUserVerify === false) {
-      await ctx.replyWithHTML(Message.welcomeMessage(user.userName))
+      await ctx.replyWithHTML(Message.welcomeMessage(user.userName),
+      { disable_web_page_preview: true });
 
             const sentMessage = await ctx.replyWithHTML(Message.botCondition, {
                 disable_web_page_preview: true,
@@ -167,23 +246,17 @@ const CheckIfUserIsVerified= async (ctx)=>{
         await BaseHelper.deletePrevMsg(bot, chatId, messageId )
          await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
 
-            return false
+         return false
           
   }
 
- //if (user && user.isUserVerify === true) {
     return true
- //}
-  
-
-  //if user reponse with another message below
 
 };
 
 //handle user messages function///check later
 const handleMessageMethod = async (ctx)=>{
-  const{userId, userName, message, chatId, messageId} =  TelegrafHelper.getUserChatInfo(ctx);
-
+  const{userId, chatId, messageId} =  TelegrafHelper.getUserChatInfo(ctx);
   const messageState =  STATES.messageState.get(userId);//always use the user id here not ctx
 
   let sentMessage = '';
@@ -198,6 +271,36 @@ const handleMessageMethod = async (ctx)=>{
       await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
       return;
 
+
+}
+//referal function
+
+const referralsProgramFunction= async (ctx)=>{
+  const {userId, chatId, messageId } = TelegrafHelper.getUserChatInfo(ctx);
+  const user = await User.findOne({userId}).lean();
+  if (!user) {
+   await ctx.reply(`can proceed!`)
+  }
+
+  const countReferrals = await User.countDocuments({
+    referredBy: userId
+    ///to count by the array of string check i later
+  }).lean();
+ /// console.log(countReferrals);
+  //get user balance
+
+  const balance = user.balance || 0;
+  //console.log(balance)
+
+  const sentMessage = TelegrafHelper.sendReponse(
+    ctx,
+    await Message.referralMessage(userId, countReferrals, balance),
+    BUTTONS.balanceButtons
+    
+  );
+
+  await BaseHelper.deletePrevMsg(bot, chatId, messageId )
+  await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
 
 }
 

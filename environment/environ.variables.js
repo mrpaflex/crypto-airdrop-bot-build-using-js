@@ -4,6 +4,8 @@ dotenv.config();
  const EnvironVariables={
     DB_UR: process.env.DB_URL,
     PORT: process.env.PORT,
+    REFERRALPOINT: +process.env.REFERRALPOINT,
+    TELEGRAM_GROUPS: [-1001473695848],
    
     
    BOT: {

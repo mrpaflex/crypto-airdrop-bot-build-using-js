@@ -12,10 +12,6 @@ const UserSchema = new Mongoose.Schema({
         required: true
     },
 
-    referralId: {
-        type: String,
-    },
-
     isUserVerify: {
         type: Boolean,
         default: false
@@ -26,11 +22,21 @@ const UserSchema = new Mongoose.Schema({
         default: Date.now()
     },
     userWallet: {
-        type: String,
-        
+        type: String, 
+    },
+
+    balance: {
+        type: Number,
+        default: 0
+    },
+
+    referrals:{
+        type: [String]
+    },
+
+    referredBy:{
+        type: String
     }
-
-
 })
 
 const User = Mongoose.model("User", UserSchema);

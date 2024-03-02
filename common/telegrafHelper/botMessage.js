@@ -15,7 +15,12 @@ const Message = {
 
     about_us: `paflex is a telegram bot for testing now`,
 
-    botCondition: `to use our bot kindly join the following channel`
+    botCondition: `to use our bot kindly join the following channel https://t.me/blockchaingist`,
+
+    referralMessage: async (userId, referralCount, referalBalance)=>{
+        return `you have successfully intvited ${referralCount} friends, your current balance is ${referalBalance}. share your referal link is https://t.me/${EnvironVariables.BOT.BOT_USERNAME}?start=${userId}
+        `
+    }
 }
 
 module.exports = {Message}
