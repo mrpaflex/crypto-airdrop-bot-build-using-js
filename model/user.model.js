@@ -1,4 +1,4 @@
-const { type } = require("express/lib/response");
+//const { type } = require("express/lib/response");
 const  Mongoose  = require("mongoose");
 
 const UserSchema = new Mongoose.Schema({

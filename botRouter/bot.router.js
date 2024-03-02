@@ -9,7 +9,10 @@ const { BaseHelper } = require('../common/utils/baseHelper');
 const {BUTTONS} = require('../common/buttons/button.user');
 const { Markup } = require('telegraf');
 const { STATES } = require('../common/module/StateMondule/state.message.helper');
+const BotDb = require('../model/dbbot.model');
 
+
+//console.log(EnvironVariables.BOT.ADMINS);
 
 bot.start(async (ctx) => {
    try {
@@ -37,13 +40,47 @@ bot.action('wallet', async (ctx)=>{
   }
 });
 
+//click to take you back to home..home button or when home button is click
+bot.action('go_home', async (ctx)=>{
+  try {
+    await TakeMeToHomePage(ctx)
+  } catch (error) {
+    console.log(error)
+  }
+});
+
+bot.action('create_bot_in_db', async (ctx)=>{
+  try {
+    await CreateBotInDbMethod(ctx)
+  } catch (error) {
+    console.log(error)
+  }
+});
+
+bot.action('about_us', async (ctx)=>{
+  try {
+   const {userId, chatId, messageId} = TelegrafHelper.getUserChatInfo(ctx);
+   const sentMessage = await TelegrafHelper.sendReponse(
+    ctx,
+    Message.about_us,
+    Markup.inlineKeyboard([
+      Markup.button.callback('📝 OK', 'go_home'),
+      Markup.button.callback('🏠 Home', 'go_home')
+    ])
+   )
+
+   await BaseHelper.deletePrevMsg(bot, chatId, messageId )
+   await  BaseHelper.setPrevMsg(userId, sentMessage.message_id);
+  } catch (error) {
+    console.log(error)
+  }
+});
+
 
 bot.action('set_wallet_address', async (ctx)=>{
   try {
-    const {userId, chatId, message, messageId} = TelegrafHelper.getUserChatInfo(ctx);
-    const stateM =  STATES.messageState.set(userId, 'set_wallet_address');
-
-   // const statemsg = STATES.messageState.get(userId)
+    const {userId, chatId, messageId} = TelegrafHelper.getUserChatInfo(ctx);
+   STATES.messageState.set(userId, 'set_wallet_address');
 
     const sentMessage = await TelegrafHelper.sendReponse(
       ctx,
@@ -67,6 +104,40 @@ bot.action('get_referrals', async (ctx)=>{
   } catch (error) {
     console.log(error)
   }
+});
+
+bot.action('get_balance', async (ctx)=>{
+  try {
+    await CheckUserBalance(ctx);
+  } catch (error) {
+    console.log(error)
+  }
+});
+
+bot.action('request_withdrawal', async (ctx)=>{
+  try {
+    console.log('checking')
+    await MakeWithdrawalMethod(ctx)
+  } catch (error) {
+    
+  }
+})
+
+bot.action('enable_withdrawal', async (ctx)=>{
+  try {
+    console.log('checking enable withdrawal')
+    await EnableWithWithDrawalMethod(ctx)
+  } catch (error) {
+    
+  }
+});
+
+bot.action('disable_withdrawal', async (ctx)=>{
+  try {
+    await DisableWithWithDrawalMethod(ctx)
+  } catch (error) {
+    
+  }
 })
 
 bot.on('message', async (ctx)=>{
@@ -82,13 +153,10 @@ bot.on('message', async (ctx)=>{
 const saveUser = async (ctx) => {
     try {
         const {userId,chatId, userName, startPayload, messageId} =  TelegrafHelper.getUserChatInfo(ctx);
-
-
-      
         const user = await User.findOne({userId});
 
         if (!user) {
-          console.log('i am startPayload', startPayload)//this is a payload or user data that are come along when a user click on the /start command.. for example: if someone refer you, the payload is the information of the person who referred you  
+         // console.log('i am startPayload', startPayload)//this is a payload or user data that are come along when a user click on the /start command.. for example: if someone refer you, the payload is the information of the person who referred you  
             let referredBy;
 
             if (startPayload && startPayload === userId) {
@@ -256,7 +324,7 @@ const CheckIfUserIsVerified = async (ctx)=>{
 
 //handle user messages function///check later
 const handleMessageMethod = async (ctx)=>{
-  const{userId, chatId, messageId} =  TelegrafHelper.getUserChatInfo(ctx);
+  const{userId, chatId, messageId, message} =  TelegrafHelper.getUserChatInfo(ctx);
   const messageState =  STATES.messageState.get(userId);//always use the user id here not ctx
 
   let sentMessage = '';
@@ -265,10 +333,12 @@ const handleMessageMethod = async (ctx)=>{
 
     await setWalletAddressMethod(ctx);
 
+  }else if (message?.toLowerCase() === 'admin login') {
+    await AdminLoginMethod(ctx);
   }
 
-      await BaseHelper.deletePrevMsg(bot, chatId, messageId )
-      await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
+  await BaseHelper.deletePrevMsg(bot, chatId, messageId )
+  await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
       return;
 
 
@@ -292,7 +362,9 @@ const referralsProgramFunction= async (ctx)=>{
   const balance = user.balance || 0;
   //console.log(balance)
 
-  const sentMessage = TelegrafHelper.sendReponse(
+
+  //await here is really important
+  const sentMessage = await TelegrafHelper.sendReponse(
     ctx,
     await Message.referralMessage(userId, countReferrals, balance),
     BUTTONS.balanceButtons
@@ -301,9 +373,87 @@ const referralsProgramFunction= async (ctx)=>{
 
   await BaseHelper.deletePrevMsg(bot, chatId, messageId )
   await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
+//not need for return shai
+return;
 
 }
 
+//admin login function
+const AdminLoginMethod = async (ctx)=>{
+  const {userId, chatId, message, messageId} = TelegrafHelper.getUserChatInfo(ctx)
+  const botAdmins = EnvironVariables.BOT.ADMINS;
+  const isAdmins = botAdmins.includes(userId);
+
+  if (isAdmins) {
+     await TelegrafHelper.sendReponse(
+      ctx,
+      `you have successfully login as an admin. click below to start using the admin bot`,
+      BUTTONS.createAdminBot
+    )
+  }
+  
+}
+
+///bot schema
+const CreateBotInDbMethod = async (ctx)=>{
+  const {userId, chatId, message, messageId} = TelegrafHelper.getUserChatInfo(ctx);
+
+  const {id, first_name, username}= await ctx.botInfo;
+  const dbAdminBot = await BotDb.findOne({botId: id}).lean();
+  if (!dbAdminBot) {
+    await BotDb.create({
+      botId: id,
+      botName: first_name,
+      botUserName: username
+    })
+  }
+
+    await TelegrafHelper.sendReponse(
+     ctx,
+     `choose any button to set action`,
+     BUTTONS.adminButtons
+   )
+  
+}
+
+//take me back to home paage
+const TakeMeToHomePage = async (ctx)=>{
+  const {userId, chatId, messageId} = TelegrafHelper.getUserChatInfo(ctx);
+  const sentMessage = await TelegrafHelper.sendReponse(
+    ctx,
+    Message.afterJoinGroupMessage,
+    BUTTONS.homebuttons
+  )
+
+  await BaseHelper.deletePrevMsg(bot, chatId, messageId )
+  await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
+ // return;
+};
+
+//check user balance function
+const CheckUserBalance = async (ctx)=>{
+  const {userId, chatId, messageId} = TelegrafHelper.getUserChatInfo(ctx);
+  const user = await User.findOne({userId}).lean();
+  const mybalance = user.balance;
+  const sentMessage = await TelegrafHelper.sendReponse(
+    ctx,
+    `your current balance is ${mybalance} BCG`,
+    BUTTONS.balanceButtons
+  );
+  await BaseHelper.deletePrevMsg(bot, chatId, messageId )
+  await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
+};
+
+// const createBotByAdmin = async(ctx)=>{
+//   const bot = await Bot.findOne(ctx.).lean();
+
+// }
+
+const MakeWithdrawalMethod = async (ctx)=>{
+  const {userId, message, chatId } = TelegrafHelper.getUserChatInfo(ctx);
+  //check if withdrawal is enable
+  
+}
 //get wallet function
 const getWallet = async (ctx)=>{
   const {userId, chatId, messageId, message} =  TelegrafHelper.getUserChatInfo(ctx);
@@ -341,6 +491,75 @@ const getWallet = async (ctx)=>{
   return;
 }
 
+const EnableWithWithDrawalMethod = async (ctx)=>{
+//  const {userId, message, messageId, chatId} = TelegrafHelper.getUserChatInfo(ctx);
+  const {id}= await ctx.botInfo;
+
+  const bot = await BotDb.findOne({botId: id});
+  if (!bot) {
+    ctx.reply('can not process for now')
+  }
+
+  
+  if (bot.isWithdrawalEnable === true) {
+    await TelegrafHelper.sendReponse(
+      ctx,
+      `withdrawal is already enable`,
+     BUTTONS.adminButtons
+    )
+  }
+ if (bot.isWithdrawalEnable === false) {
+  const dbBotId = bot._id;
+
+  await BotDb.findByIdAndUpdate(dbBotId, {isWithdrawalEnable: true
+  },
+  {new: true, runValidators: true}
+  )
+
+  await TelegrafHelper.sendReponse(
+    ctx,
+    `withdrawal is now enable`,
+   BUTTONS.adminButtons
+  )
+ }
+
+};
+
+
+const DisableWithWithDrawalMethod = async (ctx)=>{
+  //  const {userId, message, messageId, chatId} = TelegrafHelper.getUserChatInfo(ctx);
+    const {id}= await ctx.botInfo;
+  
+    const bot = await BotDb.findOne({botId: id});
+    if (!bot) {
+      ctx.reply('can not process for now')
+    }
+  
+    
+    if (bot.isWithdrawalEnable === false) {
+      await TelegrafHelper.sendReponse(
+        ctx,
+        `withdrawal is already Disable`,
+       BUTTONS.adminButtons
+      )
+    }
+   if (bot.isWithdrawalEnable === true) {
+    const dbBotId = bot._id;
+  
+    await BotDb.findByIdAndUpdate(dbBotId, {isWithdrawalEnable: true
+    },
+    {new: true, runValidators: false}
+    )
+  
+    await TelegrafHelper.sendReponse(
+      ctx,
+      `withdrawal is now Disable`,
+     BUTTONS.adminButtons
+    )
+   }
+  
+  };
+
  const setWalletAddressMethod = async (ctx)=>{
 
   const {userId, chatId, messageId, message} =  TelegrafHelper.getUserChatInfo(ctx);
@@ -351,7 +570,7 @@ const getWallet = async (ctx)=>{
 
   const sentMessage = TelegrafHelper.sendReponse(
     ctx,
-    `wallet successfully set`,
+    `wallet ${message} successfully set`,
     Markup.inlineKeyboard([
       Markup.button.callback('📝 Update Wallet', 'set_wallet_address'),
       Markup.button.callback('🏠 Home', 'go_home')

@@ -7,7 +7,6 @@ dotenv.config();
     REFERRALPOINT: +process.env.REFERRALPOINT,
     TELEGRAM_GROUPS: [-1001473695848],
    
-    
    BOT: {
         BOT_TOKEN: process.env.BOT_TOKEN,
         BOT_USERNAME: process.env.BOT_USERNAME,
