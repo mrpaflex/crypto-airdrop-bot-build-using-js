@@ -262,8 +262,9 @@ const AdminLoginMethod = async (ctx)=>{
       `you have successfully login as an admin. click below to start using the admin bot`,
       BUTTONS.createAdminBot
     )
+    return;
   }
-  return;
+  
 }
 
 ///bot schema
@@ -271,13 +272,16 @@ const CreateBotInDbMethod = async (ctx)=>{
   const {userId, chatId, message, messageId} = TelegrafHelper.getUserChatInfo(ctx);
 
   const {id, first_name, username}= await ctx.botInfo;
+
   const dbAdminBot = await BotDb.findOne({botId: id}).lean();
+
   if (!dbAdminBot) {
     await BotDb.create({
       botId: id,
       botName: first_name,
       botUserName: username
-    })
+    });
+    return;
   }
 
     await TelegrafHelper.sendReponse(
@@ -403,9 +407,11 @@ const MakeWithdrawal = async (ctx)=>{
 
   const newbalance =  balance - withdrawAmount;
     
+  // `you have requested to withdraw ${withdrawAmount} BCG from your balance. Kindly wait for confirmation ...`,
+  // `congratulation! You have successfully withdraw ${withdrawAmount} to your wallet ${user.userWallet}. your new balance is ${newbalance}`
   await TelegrafHelper.sendReponse(
     ctx,
-    `congratulation! You have successfully withdraw ${withdrawAmount} to your wallet ${user.userWallet}. your new balance is ${newbalance}`,
+     `congratulation! You have successfully withdraw ${withdrawAmount} to your wallet ${user.userWallet}. your new balance is ${newbalance}`,
     Markup.inlineKeyboard([
       Markup.button.callback('💰 Withdraw Again', 'request_withdrawal'),
       Markup.button.callback('🏠 Home', 'go_home')
