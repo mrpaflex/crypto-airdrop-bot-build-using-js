@@ -34,7 +34,7 @@ const BUTTONS={
 
 
       createAdminBot: Markup.inlineKeyboard([
-        [Markup.button.callback('📣 Use Bot Admin', 'create_bot_in_db')],
+        [Markup.button.callback('📣 Use Admin Bot', 'create_bot_in_db')],
       ]),
 }
 

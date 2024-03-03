@@ -116,8 +116,7 @@ bot.action('get_balance', async (ctx)=>{
 
 bot.action('request_withdrawal', async (ctx)=>{
   try {
-    console.log('checking')
-    await MakeWithdrawalMethod(ctx)
+    await RequestForWithdrawalMethod(ctx)
   } catch (error) {
     
   }
@@ -195,7 +194,7 @@ const saveUser = async (ctx) => {
       await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
 
     } catch (error) {
-        console.log('error whie saving user', error)
+        console.log('error while saving user', error)
     }
 }
 
@@ -335,6 +334,8 @@ const handleMessageMethod = async (ctx)=>{
 
   }else if (message?.toLowerCase() === 'admin login') {
     await AdminLoginMethod(ctx);
+  }else if(messageState=== 'request_withdrawal'){
+    await MakeWithdrawal(ctx)
   }
 
   await BaseHelper.deletePrevMsg(bot, chatId, messageId )
@@ -449,10 +450,80 @@ const CheckUserBalance = async (ctx)=>{
 
 // }
 
-const MakeWithdrawalMethod = async (ctx)=>{
-  const {userId, message, chatId } = TelegrafHelper.getUserChatInfo(ctx);
+const RequestForWithdrawalMethod = async (ctx)=>{
+  const {id}= await ctx.botInfo;
+  const {userId, messageId, chatId, message } = TelegrafHelper.getUserChatInfo(ctx);
+
   //check if withdrawal is enable
+  const botdb = await BotDb.findOne({botId: id}).lean()
+  if (botdb.isWithdrawalEnable === false) {
+   const sentMessage = await TelegrafHelper.sendReponse(
+      ctx,
+      `withdrawal is not enable, try again later`,
+      BUTTONS.balanceButtons
+    )
+
+    await BaseHelper.deletePrevMsg(bot, chatId, messageId )
+    await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
+  }
+
+  const user = await User.findOne({userId}).lean();
+  const balance = user.balance;
+
+  if (balance <= 0 ) {
+    await TelegrafHelper.sendReponse(
+      ctx,
+      `Insufficient fund, share your referral link to earn`,
+      BUTTONS.balanceButtons
+    )
+  }
+
+  if (balance> 0) {
+    STATES.messageState.set(userId, 'request_withdrawal');
+
+    await TelegrafHelper.sendReponse(
+      ctx,
+      `set the amount you want to withdraw`,
+      Markup.inlineKeyboard([
+        Markup.button.callback('❌ Cancel', 'go_home')
+      ])
+    )
+
+  }
   
+ 
+}
+
+//make withdrawal method
+const MakeWithdrawal = async (ctx)=>{
+  const {userId, chatId, message, messageId} = TelegrafHelper.getUserChatInfo(ctx);
+  
+  const user = await User.findOne({userId}).lean();
+  const id = user._id;
+  const withdrawAmount = +message;
+  const balance = user.balance;
+  
+  if (withdrawAmount > balance) {
+   await TelegrafHelper.sendReponse(
+      ctx,
+      `insufficient balance, kindly check your current balance and try again`,
+      BUTTONS.balanceButtons
+    )
+  }
+
+  const newbalance =  balance - withdrawAmount;
+    
+  await TelegrafHelper.sendReponse(
+    ctx,
+    `congratulation! You have successfully withdraw ${withdrawAmount} to your wallet ${user.userWallet}. your new balance is ${newbalance}`,
+    Markup.inlineKeyboard([
+      Markup.button.callback('💰 Withdraw Again', 'request_withdrawal'),
+      Markup.button.callback('🏠 Home', 'go_home')
+    ])
+  )
+
+  await User.findByIdAndUpdate(id, {balance: newbalance}, {new: true, runValidators: true});
+
 }
 //get wallet function
 const getWallet = async (ctx)=>{
@@ -546,9 +617,9 @@ const DisableWithWithDrawalMethod = async (ctx)=>{
    if (bot.isWithdrawalEnable === true) {
     const dbBotId = bot._id;
   
-    await BotDb.findByIdAndUpdate(dbBotId, {isWithdrawalEnable: true
+    await BotDb.findByIdAndUpdate(dbBotId, {isWithdrawalEnable: false
     },
-    {new: true, runValidators: false}
+    {new: true, runValidators: true}
     )
   
     await TelegrafHelper.sendReponse(
