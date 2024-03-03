@@ -88,8 +88,8 @@ bot.action('set_wallet_address', async (ctx)=>{
     )
 
   
-   await BaseHelper.deletePrevMsg(bot, chatId, messageId )
-   await  BaseHelper.setPrevMsg(userId, sentMessage.message_id);
+  //  await BaseHelper.deletePrevMsg(bot, chatId, messageId )
+  //  await  BaseHelper.setPrevMsg(userId, sentMessage.message_id);
   } catch (error) {
     console.log(error)
   }
@@ -121,7 +121,6 @@ bot.action('request_withdrawal', async (ctx)=>{
 
 bot.action('enable_withdrawal', async (ctx)=>{
   try {
-    console.log('checking enable withdrawal')
     await EnableWithWithDrawalMethod(ctx)
   } catch (error) {
     

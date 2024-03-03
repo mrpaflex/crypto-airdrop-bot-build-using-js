@@ -24,7 +24,7 @@ const BUTTONS={
         [Markup.button.callback('📣 Broadcast Message', 'broadcast_message')],
         [
           Markup.button.callback('📈 Stats', 'get_stats'),
-          Markup.button.callback('🔒 Admin Logout', 'admin_logout')
+          Markup.button.callback('🔒 Admin Logout', 'go_home')
         ],
         [
           Markup.button.callback('🔓 Enable Withdrawal', 'enable_withdrawal'),

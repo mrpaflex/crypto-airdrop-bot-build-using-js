@@ -55,7 +55,7 @@ const saveUser = async (ctx) => {
 
       await BaseHelper.deletePrevMsg(bot, chatId, messageId )
       await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
-
+      return;
     } catch (error) {
         console.log('error while saving user', error)
     }
@@ -82,6 +82,7 @@ const verifyUserMehod = async (ctx) => {
         } else {
             verificationStatus = true;
         }
+        return;
     }
     
 
@@ -113,6 +114,7 @@ const verifyUserMehod = async (ctx) => {
           {isUserVerify: true},
           {new: true, runValidators: true}
       );
+      return;
       }
 
       const referralByUser = user.referredBy;
@@ -124,7 +126,7 @@ const verifyUserMehod = async (ctx) => {
 
         if (referalUser) {
           const referbyId = referalUser._id;
-          console.log('rId', referbyId);
+         // console.log('rId', referbyId);
           const referPoint = EnvironVariables.REFERRALPOINT;
           const currentblance = referalUser.balance
           // console.log(' i am rfpoint', referPoint);
@@ -138,8 +140,10 @@ const verifyUserMehod = async (ctx) => {
               {new: true, runValidators: true}
           );
       }
+      return;
       }
       await saveUser(ctx);
+      return;
   } catch (error) {
       console.log(error);
       // Handle error appropriately, e.g., notify the user
@@ -194,16 +198,20 @@ const handleMessageMethod = async (ctx)=>{
   if ( messageState === 'set_wallet_address') {
 
     await setWalletAddressMethod(ctx);
+    return;
 
   }else if (message?.toLowerCase() === 'admin login') {
     await AdminLoginMethod(ctx);
+    return;
+
   }else if(messageState=== 'request_withdrawal'){
-    await MakeWithdrawal(ctx)
+    await MakeWithdrawal(ctx);
+    return;
   }
 
   await BaseHelper.deletePrevMsg(bot, chatId, messageId )
   await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
-      return;
+  return;
 
 
 }
@@ -255,7 +263,7 @@ const AdminLoginMethod = async (ctx)=>{
       BUTTONS.createAdminBot
     )
   }
-  
+  return;
 }
 
 ///bot schema
@@ -278,6 +286,7 @@ const CreateBotInDbMethod = async (ctx)=>{
      BUTTONS.adminButtons
    )
   
+   return;
 }
 
 //take me back to home paage
@@ -291,7 +300,7 @@ const TakeMeToHomePage = async (ctx)=>{
 
   await BaseHelper.deletePrevMsg(bot, chatId, messageId )
   await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
- // return;
+  return;
 };
 
 //check user balance function
@@ -305,7 +314,8 @@ const CheckUserBalance = async (ctx)=>{
     BUTTONS.balanceButtons
   );
   await BaseHelper.deletePrevMsg(bot, chatId, messageId )
-  await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
+  await  BaseHelper.setPrevMsg(userId, sentMessage.message_id);
+  return;
 };
 
 // const createBotByAdmin = async(ctx)=>{
@@ -327,18 +337,34 @@ const RequestForWithdrawalMethod = async (ctx)=>{
     )
 
     await BaseHelper.deletePrevMsg(bot, chatId, messageId )
-    await  BaseHelper.setPrevMsg(userId, sentMessage.message_id)
+    await  BaseHelper.setPrevMsg(userId, sentMessage.message_id);
+    return;
   }
 
   const user = await User.findOne({userId}).lean();
   const balance = user.balance;
+  const userWallet = user.userWallet;
+ // console.log(userWallet)
 
   if (balance <= 0 ) {
     await TelegrafHelper.sendReponse(
       ctx,
-      `Insufficient fund, share your referral link to earn`,
-      BUTTONS.balanceButtons
+      `Insufficient fund, share your referral link to earn https://t.me/${EnvironVariables.BOT.BOT_USERNAME}?start=${userId}`,
+      BUTTONS.balanceButtons,
     )
+   return;
+  }
+
+  if (!userWallet || userWallet === 'undefined') {
+    await TelegrafHelper.sendReponse(
+      ctx,
+      `you haven't set your withdrawal wallet yet`,
+      Markup.inlineKeyboard([
+        Markup.button.callback('📝 Set Wallet', 'set_wallet_address'),
+        Markup.button.callback('❌ Cancel', 'go_home')
+      ])
+    )
+    return;
   }
 
   if (balance> 0) {
@@ -351,7 +377,7 @@ const RequestForWithdrawalMethod = async (ctx)=>{
         Markup.button.callback('❌ Cancel', 'go_home')
       ])
     )
-
+  return;
   }
   
  
@@ -372,6 +398,7 @@ const MakeWithdrawal = async (ctx)=>{
       `insufficient balance, kindly check your current balance and try again`,
       BUTTONS.balanceButtons
     )
+    return;
   }
 
   const newbalance =  balance - withdrawAmount;
@@ -386,7 +413,7 @@ const MakeWithdrawal = async (ctx)=>{
   )
 
   await User.findByIdAndUpdate(id, {balance: newbalance}, {new: true, runValidators: true});
-
+    return;
 }
 //get wallet function
 const getWallet = async (ctx)=>{
@@ -461,21 +488,23 @@ const EnableWithWithDrawalMethod = async (ctx)=>{
 
 
 const DisableWithWithDrawalMethod = async (ctx)=>{
-  //  const {userId, message, messageId, chatId} = TelegrafHelper.getUserChatInfo(ctx);
+    const {userId, message, messageId, chatId} = TelegrafHelper.getUserChatInfo(ctx);
     const {id}= await ctx.botInfo;
   
     const bot = await BotDb.findOne({botId: id});
     if (!bot) {
-      ctx.reply('can not process for now')
+      ctx.reply('can not process for now');
+      return;
     }
   
     
     if (bot.isWithdrawalEnable === false) {
-      await TelegrafHelper.sendReponse(
+   await TelegrafHelper.sendReponse(
         ctx,
         `withdrawal is already Disable`,
        BUTTONS.adminButtons
-      )
+      );
+      return;
     }
    if (bot.isWithdrawalEnable === true) {
     const dbBotId = bot._id;
@@ -485,13 +514,16 @@ const DisableWithWithDrawalMethod = async (ctx)=>{
     {new: true, runValidators: true}
     )
   
-    await TelegrafHelper.sendReponse(
+  await TelegrafHelper.sendReponse(
       ctx,
       `withdrawal is now Disable`,
      BUTTONS.adminButtons
-    )
+    );
+    return;
    }
   
+
+
   };
 
  const setWalletAddressMethod = async (ctx)=>{
@@ -500,9 +532,18 @@ const DisableWithWithDrawalMethod = async (ctx)=>{
   const user = await User.findOne({userId}).lean();
   const id = user._id;
 
+  //validate the wallet here
+  const iswalletvalid = await isValidWalletAddress(message);
+
+  if (!iswalletvalid) {
+   ctx.reply(`Invalid wallet address`);
+   return;
+  }
+
+
   await User.findByIdAndUpdate(id, {userWallet: message}, {new: true, runValidators: true});
 
-  const sentMessage = TelegrafHelper.sendReponse(
+  const sentMessage = await TelegrafHelper.sendReponse(
     ctx,
     `wallet ${message} successfully set`,
     Markup.inlineKeyboard([
@@ -513,6 +554,17 @@ const DisableWithWithDrawalMethod = async (ctx)=>{
 
   await BaseHelper.deletePrevMsg(bot, chatId, messageId )
   await  BaseHelper.setPrevMsg(userId, sentMessage.message_id);
+  return;
+
+ }
+
+ const isValidWalletAddress = async (wallet)=>{
+  try {
+    const regex = /^(0x)?[0-9a-fA-F]{40}$/;
+    return regex.test(wallet);
+  } catch (error) {
+    console.log(error)
+  }
  }
 
 
